@@ -57,10 +57,10 @@ Agreed direction, not yet built:
 
 ## Current status
 
-- v0.1 source is in this repo exactly as delivered (originally `Downloads\ghostarchive`). The **V2 files are current**: `GhostCaptureV2`, `GhostLoaderV2`, `GhostArchiveV2.shader`, `ghost_scribe_v2.py` (base + new split, no opt-out, scribe-only capture, `DisableBatching`). v1 files are kept for reference; `GhostOptOut.cs` is retired. **Nothing has been compiled or brought up in Unity.** Expect UdonSharp API mismatches against the installed SDK; see `docs/CLAUDE_ghosts.md` for the list of calls to verify.
+- v0.1 source is in this repo exactly as delivered (originally `Downloads\ghostarchive`). The **V2 files are current**: `GhostCaptureV2`, `GhostLoaderV2`, `GhostArchiveV3.shader`, `ghost_scribe_v2.py` (base + new split, no opt-out, scribe-only capture, `DisableBatching`; V3 shader adds foot grounding). v1 files are kept for reference; `GhostOptOut.cs` is retired. **Nothing has been compiled or brought up in Unity.** Expect UdonSharp API mismatches against the installed SDK; see `docs/CLAUDE_ghosts.md` for the list of calls to verify.
 - `docs/CLAUDE_ghosts.md` is the sequenced bring-up plan (compile check → mock data → rig → mesh build → render test → loader → capture). Follow it in order, stop and report after each step.
 - `docs/POSE_FORMAT.md` is the data contract (log line format, pose texture layout, TSV). **Do not change the log line format or pose layout.**
-- README.md lists things the original author could not verify (PNG bit-exactness through `VRCImageDownloader`, `GetAvatarEyeHeightAsMeters`, the 180° `rotateFromTo` edge case, large-TSV string ops in Udon). Treat these as the first things to test.
+- README.md lists things the original author could not verify (PNG bit-exactness through `VRCImageDownloader`, `GetAvatarEyeHeightAsMeters`, the 180° `rotateFromTo` edge case, large-TSV string ops in Udon). The `rotateFromTo` math is now verified by `tools/shader_ref.py`; GPU behaviour still needs a device check. Treat these as the first things to test.
 - The `choir` Unity project at `C:\Users\Nicho\AppData\Local\VRChatCreatorCompanion\VRChatProjects\choir` is **read-only**. Nothing is modified or deleted there unless Nick says so explicitly. This repo is where the work happens; importing into choir is a separate, later step.
 
 ## Repo layout
@@ -72,17 +72,19 @@ ghost-archive/
                  GhostLoaderV2.cs  (baked base + new ghosts from Pages, drives material)
                  GhostCapture.cs, GhostLoader.cs, GhostOptOut.cs (v1, as delivered — not used)
     Editor/      GhostMeshBuilder.cs (bakes N rig copies into one mesh; regenerates GhostRig.cginc)
-    Shaders/     GhostArchiveV2.shader (two pose textures, pose-texture skinning, age dither)
-                 GhostArchive.shader   (v1, as delivered — not used)
+    Shaders/     GhostArchiveV3.shader (two pose textures, pose-texture skinning, foot grounding, age dither)
+                 GhostArchive.shader, GhostArchiveV2.shader (older versions — not used)
                  GhostRig.cginc        (rig constants — generated; generic default checked in)
   scribe/        ghost_scribe_v2.py (tails VRChat log → local archive → bake / publish new → force push)
                  ghost_scribe.py    (v1, as delivered — not used)
                  .state/ghosts.json (local archive, gitignored — back this up, it is the only copy)
+  tools/         shader_ref.py (CPU mirror of the current shader's vertex math; run after any shader/format change)
   docs/          CLAUDE_ghosts.md (bring-up plan), POSE_FORMAT.md (the contract)
   README.md      v0.1 overview, bring-up order, unverified items, not-in-v0.1 list
   CLAUDE.md      this file
 ```
 
+Off-device shader check: `python tools/shader_ref.py` (split, pose round trip, grounding, rotateFromTo). Must stay ALL PASS.
 Mock data: `python scribe/ghost_scribe_v2.py --mock 200 --out ./mock` writes base + new test files with no VRChat.
 Bake cycle: stop scribe → `--bake <Assets dir>` → publish world → start scribe (its first publish trims the data repo).
 Data repo: a separate public repo with GitHub Pages on; the scribe's `--repo` is a local clone of it.

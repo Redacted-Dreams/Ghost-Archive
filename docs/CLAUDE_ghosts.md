@@ -11,7 +11,7 @@ Get the Ghost Archive rendering in the editor from mock data, then compiling in 
 Assets/GhostArchive/Udon/GhostCaptureV2.cs
 Assets/GhostArchive/Udon/GhostLoaderV2.cs
 Assets/GhostArchive/Editor/GhostMeshBuilder.cs
-Assets/GhostArchive/Shaders/GhostArchiveV2.shader
+Assets/GhostArchive/Shaders/GhostArchiveV3.shader
 Assets/GhostArchive/Shaders/GhostRig.cginc        (generic default; builder regenerates)
 Tools/ghost_scribe_v2.py                           (outside Assets/)
 docs/POSE_FORMAT.md
@@ -30,10 +30,10 @@ Do this in a scratch test project first, not choir (choir is read-only).
 4. **Build mesh.** `AshenChoir > Ghost Mesh Builder`, 200 copies, 16-bit indices. Confirm it rewrites
    `GhostRig.cginc` with real rest positions and eye height.
 5. **Render test.** Empty GameObject `GhostArchive` at world origin, MeshFilter = built mesh, MeshRenderer with
-   material `M_GhostArchive` (shader `AshenChoir/GhostArchiveV2`). Set `_PoseTex` = `poses_base.png`, `_PoseRows` = its height,
+   material `M_GhostArchive` (shader `AshenChoir/GhostArchiveV3`). Set `_PoseTex` = `poses_base.png`, `_PoseRows` = its height,
    `_BaseCount` = 160, `_PoseTexNew` = mock `poses.png`, `_PoseRowsNew` = its height, `_NewStart` = 160, `_GhostCount` = 200,
    `_TodayDay` = (days since 2020-01-01 UTC, compute today), `_LinearizeSRGB` = 0 and `_LinearizeSRGBNew` = 0 for
-   editor-imported textures. Expect 200 posed humanoids scattered ±6 m. Then set `_BaseCount` = 0: expect only the 40 new
+   editor-imported textures. Expect 200 posed humanoids scattered ±6 m, feet on the ground. Then set `_BaseCount` = 0: expect only the 40 new
    ghosts; indices 0–159 fall before `_NewStart` and are not drawn. This proves the split and the gap handling. If limbs are wrong, debug in this order:
    pixel decode (`read2`) → root/height → direction chain → per-bone rotation. Render a single ghost by setting
    `_GhostCount` = 1.
