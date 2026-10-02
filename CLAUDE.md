@@ -40,18 +40,24 @@ Three layers, one data flow:
 - Every patched file gets a new version tail (e.g. `GhostShaderV3`), never edited in place under the same name.
 - Must run on both PC and Quest.
 - VRChat staff have confirmed in writing that the external bot/scribe setup is permissible.
+- Opaque cutout + Bayer dither. No transparency.
+- Opt-out model, not opt-in: `GhostOptOut` sets a PlayerData bool and writes a tombstone.
+- Capture logs only on the scribe account's client (`scribeDisplayName` check in `GhostCapture`).
+- Live archive is fetched from GitHub Pages at runtime; a baked native copy is the fallback, refreshed only on normal world publishes. No scheduled republishing.
 
 ## Planned extension — animated ghosts
 
 Agreed direction, not yet built:
-- 1.5-second pose clips instead of single frames.
+- v2 format: 1.5-second clips at 10 fps, frames across texture width, frame 0 == v1 static pose.
 - A rotating roster of **five active animated ghosts** at a time; the rest stay static.
 - Frame-lerped bone directions between clip frames.
 
 ## Current status
 
-- Nine files were delivered in an earlier session (Unity capture scripts, shader, scribe, Pages layer, and `CLAUDE_ghosts.md` with sequenced bring-up steps). **They have not been brought up in Unity yet.** Locate those files first (choir project `Assets`, `ChoirBackups`, or Downloads) before writing anything new — the originals are the source of truth and this repo should start from them, not from a rewrite.
-- `CLAUDE_ghosts.md` contains the bring-up sequence. Follow it in order with a pass/fail check at each step.
+- v0.1 source is in this repo (originally delivered to `Downloads\ghostarchive`). **It has never been compiled or brought up in Unity.** Expect UdonSharp API mismatches against the installed SDK; see `docs/CLAUDE_ghosts.md` for the list of calls to verify.
+- `docs/CLAUDE_ghosts.md` is the sequenced bring-up plan (compile check → mock data → rig → mesh build → render test → loader → capture). Follow it in order, stop and report after each step.
+- `docs/POSE_FORMAT.md` is the data contract (log line format, pose texture layout, TSV). **Do not change the log line format or pose layout.**
+- README.md lists things the original author could not verify (PNG bit-exactness through `VRCImageDownloader`, `PlayerData` signatures, `GetAvatarEyeHeightAsMeters`, the 180° `rotateFromTo` edge case, large-TSV string ops in Udon). Treat these as the first things to test.
 - The `choir` Unity project at `C:\Users\Nicho\AppData\Local\VRChatCreatorCompanion\VRChatProjects\choir` is **read-only**. Nothing is modified or deleted there unless Nick says so explicitly. This repo is where the work happens; importing into choir is a separate, later step.
 
 ## Repo layout
@@ -59,14 +65,21 @@ Agreed direction, not yet built:
 ```
 ghost-archive/
   unity/
-    Runtime/     UdonSharp capture + playback behaviours
-    Shaders/     pose-texture vertex shader (+ Quest variant)
-    Editor/      any editor tooling (pose-texture baker, etc.)
-  scribe/        ghost_scribe.py + requirements
-  pages/         GitHub Pages site: published archive data
-  docs/          CLAUDE_ghosts.md and design notes
+    Udon/        GhostCapture.cs (trigger → random capture → Debug.Log line)
+                 GhostOptOut.cs  (PlayerData opt-out + tombstone)
+                 GhostLoader.cs  (fetches poses.png + ghosts.tsv from Pages, drives material)
+    Editor/      GhostMeshBuilder.cs (bakes N rig copies into one mesh; regenerates GhostRig.cginc)
+    Shaders/     GhostArchive.shader (pose-texture skinning, age dither)
+                 GhostRig.cginc      (rig constants — generated; generic default checked in)
+  scribe/        ghost_scribe.py (tails VRChat log → archive → tsv/png → git push)
+  pages/         GitHub Pages output: poses.png + ghosts.tsv (+ archive json)
+  docs/          CLAUDE_ghosts.md (bring-up plan), POSE_FORMAT.md (the contract)
+  README.md      v0.1 overview, bring-up order, unverified items, not-in-v0.1 list
   CLAUDE.md      this file
 ```
+
+Mock data: `python scribe/ghost_scribe.py --repo ./pages --mock 200` generates test files with no VRChat.
+Pose PNG import settings in Unity: sRGB off, compression none, point filter, mipmaps off, read/write off.
 
 Long-term goal: this becomes a reusable VCC package (`com.ashenchoir.ghosts`) that drops into any world, not just choir.
 
@@ -86,8 +99,8 @@ Long-term goal: this becomes a reusable VCC package (`com.ashenchoir.ghosts`) th
 - End responses with concise, targeted questions.
 - Deliver context docs (CLAUDE_*.md) as handoff artifacts when a session produces something the next one needs.
 
-## Open questions (answer before building)
+## Open questions
 
-1. Where do the nine delivered files currently live on disk?
-2. Does the scribe run on Nick's machine only, or should it be packaged for a second host?
-3. What is the GitHub Pages repo/branch for the live data — this repo's `pages/` via Pages, or a separate repo?
+1. Does the scribe run on Nick's machine only, or should it be packaged for a second host?
+2. GitHub Pages source: this repo's `pages/` folder (recommended — one repo), or a separate repo?
+3. Which low-poly humanoid rig (≤400 tris, Humanoid, T-pose) will be the ghost mesh?

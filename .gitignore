@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+# Scribe runtime state (archive json lives in pages/ and is committed)
+scribe/*.log
+scribe/.state/
+# Unity (if a test project is ever placed here)
+Library/
+Temp/
+Logs/
+obj/
+*.csproj
+*.sln
+# OS
+.DS_Store
+Thumbs.db
