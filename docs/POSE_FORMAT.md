@@ -1,4 +1,8 @@
-# Ghost Archive — Format Spec v1
+# Ghost Archive — Format Spec v1 (TSV v2)
+
+v2 changes (2026-10): TSV gains a `base` line and ghosts are split into a baked base and
+a downloaded "new" set. Log line format and pose texture layout are **unchanged**. Opt-out and
+`[GHOSTX]` tombstones are removed (opt-out is handled by a separate system).
 
 ## One decision to flag first
 Bone **rotations** from `GetBoneRotation` are not portable between avatars: each avatar's
@@ -29,23 +33,29 @@ Capture:
 ```
 [GHOST1]|<name>|<utcUnixSeconds>|<heightMm>|<rootXmm>,<rootYmm>,<rootZmm>|<b0x>,<b0y>,<b0z>;<b1x>,...;<b18x>,<b18y>,<b18z>|<crc>
 ```
-Tombstone (opt-out):
-```
-[GHOSTX]|<name>|<utcUnixSeconds>|<crc>
-```
 - Bone values are integer millimetres relative to Hips, in world orientation.
 - `crc` = sum of char codes of everything between the tag and the final `|`, mod 65536.
 - Name is the raw display name; `|` in names is replaced by `_` before logging.
 
-## Archive files (written by the scribe, served from GitHub Pages)
-`ghosts.tsv` — one row per ghost, tab separated, header row first:
+## Archive files (written by the scribe)
+Every ghost gets a fixed ghost index on first capture (0, 1, 2, … in capture order); it never moves.
+The scribe writes two pairs of files with the same layout:
+
+| files | contains | where |
+|---|---|---|
+| `poses_base.png` + `ghosts_base.tsv` | ghosts `0 .. baked-1` | baked into the world (`--bake`), shipped on publish |
+| `poses.png` + `ghosts.tsv` | ghosts `baked ..` (new since last bake) | GitHub Pages data repo |
+
+`*.tsv` — tab separated:
 ```
-v	1
+v	2
+base	<first ghost index in this file>
 name	captureDay	lastSeenDay	visits	row
 ```
-`captureDay` = days since 2020-01-01 UTC. `row` = row index in `poses.png`.
+`captureDay` = days since 2020-01-01 UTC. `row` = absolute ghost index; the PNG row is `row - base`.
+In-world, ghost i reads the base texture if `i < baseCount`, otherwise the new texture at row `i - base`.
 
-`poses.png` — RGBA8, width 64, height = next power of two ≥ ghost count (min 64).
+`*.png` — RGBA8, width 64, height = next power of two ≥ ghost count (min 64).
 Each row is one ghost. Each 16-bit value spans two channels: **R=low byte, G=high byte**
 for the first value in a pixel, **B=low, A=high** for the second.
 ```
@@ -57,11 +67,6 @@ px 40: captureDay (16-bit), visits (R), flags (G)
 ```
 The PNG must arrive bit-exact. Verify in-world that `VRCImageDownloader` does not
 recompress; if it does, switch to a 2× redundant encoding (spec v2).
-
-## Opt-out
-- `PlayerData` bool key `ghost_optout`. Checked before every capture and on restore.
-- Toggling on logs a tombstone. Scribe deletes the record and rewrites both files.
-- Toggling off resumes capture on the *next* visit (no retroactive capture).
 
 ## Limits to design against
 - 500 ghosts PC, 150 Quest rendered; archive itself is unbounded.

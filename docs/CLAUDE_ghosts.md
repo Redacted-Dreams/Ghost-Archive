@@ -6,51 +6,51 @@ Unity Built-in RP, VRChat Worlds SDK, UdonSharp. Read `CLAUDE.md` and `CLAUDE_sh
 ## Goal of this session
 Get the Ghost Archive rendering in the editor from mock data, then compiling in Udon. No VRChat upload yet.
 
-## Source files (copy in from the GhostArchive delivery folder)
+## Source files (copy in from this repo — V2 files only)
 ```
-Assets/GhostArchive/Udon/GhostCapture.cs
-Assets/GhostArchive/Udon/GhostOptOut.cs
-Assets/GhostArchive/Udon/GhostLoader.cs
+Assets/GhostArchive/Udon/GhostCaptureV2.cs
+Assets/GhostArchive/Udon/GhostLoaderV2.cs
 Assets/GhostArchive/Editor/GhostMeshBuilder.cs
-Assets/GhostArchive/Shaders/GhostArchive.shader
+Assets/GhostArchive/Shaders/GhostArchiveV2.shader
 Assets/GhostArchive/Shaders/GhostRig.cginc        (generic default; builder regenerates)
-Tools/ghost_scribe.py                              (outside Assets/)
+Tools/ghost_scribe_v2.py                           (outside Assets/)
 docs/POSE_FORMAT.md
 ```
+Do this in a scratch test project first, not choir (choir is read-only).
 
 ## Steps, in order — stop and report after each
-1. **Compile check.** Import the three Udon scripts and the editor script. Fix any UdonSharp API mismatches
-   against the installed SDK version. Known things to verify: `PlayerData.TryGetBool(VRCPlayerApi, string, out bool)`,
-   `OnPlayerRestored`, `GetAvatarEyeHeightAsMeters`, `VRCImageDownloader.DownloadImage(VRCUrl, Material, IUdonEventReceiver, TextureInfo)`,
+1. **Compile check.** Import the two Udon scripts, the editor script and the shader. Fix any UdonSharp API mismatches
+   against the installed SDK version. Known things to verify: `GetAvatarEyeHeightAsMeters`, `VRCImageDownloader.DownloadImage(VRCUrl, Material, IUdonEventReceiver, TextureInfo)`,
    `VRCStringDownloader.LoadUrl`. Do not change the log line format or the pose layout — those are the contract.
-2. **Mock data.** `python Tools/ghost_scribe.py --repo Tools/pages --mock 200`. Import `Tools/pages/poses.png`
+2. **Mock data.** `python Tools/ghost_scribe_v2.py --mock 200 --out Tools/mock` (160 base + 40 new). Import both PNGs
    into `Assets/GhostArchive/Mock/` with: sRGB **off**, compression **none**, filter **point**, mipmaps **off**,
-   read/write off. Import `ghosts.tsv` as a TextAsset (rename to `ghosts_tsv.txt` if needed).
+   read/write off. Import both TSVs as TextAssets (rename to `.txt` if needed).
 3. **Rig.** Find or make a low-poly humanoid (≤400 tris). Requirements: Animator avatar set to Humanoid,
    T-pose, transform identity, feet on y=0, single SkinnedMeshRenderer. Place in a `GhostRig` scene.
 4. **Build mesh.** `AshenChoir > Ghost Mesh Builder`, 200 copies, 16-bit indices. Confirm it rewrites
    `GhostRig.cginc` with real rest positions and eye height.
 5. **Render test.** Empty GameObject `GhostArchive` at world origin, MeshFilter = built mesh, MeshRenderer with
-   material `M_GhostArchive` (shader `AshenChoir/GhostArchive`). Set `_PoseTex` = mock png, `_PoseRows` = png height,
-   `_GhostCount` = 200, `_TodayDay` = (days since 2020-01-01 UTC, compute today), `_LinearizeSRGB` = 0 for the
-   editor-imported texture. Expect 200 posed humanoids scattered ±6 m. If limbs are wrong, debug in this order:
+   material `M_GhostArchive` (shader `AshenChoir/GhostArchiveV2`). Set `_PoseTex` = `poses_base.png`, `_PoseRows` = its height,
+   `_BaseCount` = 160, `_PoseTexNew` = mock `poses.png`, `_PoseRowsNew` = its height, `_NewStart` = 160, `_GhostCount` = 200,
+   `_TodayDay` = (days since 2020-01-01 UTC, compute today), `_LinearizeSRGB` = 0 and `_LinearizeSRGBNew` = 0 for
+   editor-imported textures. Expect 200 posed humanoids scattered ±6 m. Then set `_BaseCount` = 0: expect only the 40 new
+   ghosts; indices 0–159 fall before `_NewStart` and are not drawn. This proves the split and the gap handling. If limbs are wrong, debug in this order:
    pixel decode (`read2`) → root/height → direction chain → per-bone rotation. Render a single ghost by setting
    `_GhostCount` = 1.
-6. **Loader.** Add `GhostLoader` to the GhostArchive object, assign renderer and the mock png/tsv as fallbacks.
-   Leave URLs empty for now; confirm fallback path renders in play mode without errors.
-7. **Capture.** Trigger volume with `GhostCapture`. In ClientSim, walk in, wait past `minDelay`, confirm a
-   `[GHOST1]|...` line appears in the console with 19 bone triples and a valid crc
-   (verify with `python Tools/ghost_scribe.py` parse — add a `--check "<line>"` flag if useful).
+6. **Loader.** Add `GhostLoaderV2` to the GhostArchive object, assign renderer and the mock base png/tsv.
+   Leave URLs empty for now; confirm the base renders (160 ghosts) in play mode without errors.
+7. **Capture.** Trigger volume with `GhostCaptureV2`, `scribeDisplayName` = the ClientSim player's name. In ClientSim,
+   walk in, wait past `minDelay`, confirm a `[GHOST1]|...` line appears in the console with 19 bone triples and a valid
+   crc: `python Tools/ghost_scribe_v2.py --check "<line>"`. Then clear `scribeDisplayName` and confirm nothing is logged.
 
 ## Decisions already made — do not relitigate
 - Positions, not rotations (cross-avatar portability). Directions only; rig keeps its own limb lengths.
 - No proportional scaling. Uniform scale by captured eye height only.
 - Opaque cutout + Bayer dither. No transparency.
-- First pose per display name wins. Opt-out is a PlayerData bool + tombstone, opt-out model not opt-in.
-- Capture logs only on the scribe account's client (add `scribeDisplayName` check to `GhostCapture` if not present:
-  `if (!Networking.LocalPlayer.displayName.Equals(scribeDisplayName)) return;` before Debug.Log).
-- Live archive is fetched from GitHub Pages; native copy is a baked fallback refreshed only on normal publishes.
-  No scheduled world republishing.
+- First pose per display name wins. No opt-out in this system (handled separately).
+- Capture logs only on the scribe account's client (`scribeDisplayName` in `GhostCaptureV2`).
+- Base archive is baked into the world on normal publishes; GitHub Pages serves only ghosts since the last bake.
+  No scheduled world republishing. Archive json stays local to the scribe machine.
 
 ## Next after this session (not now)
 - v2 format: 1.5 s clips at 10 fps, frames across texture width, frame 0 == v1 static pose.
